@@ -25,10 +25,10 @@ public class OllamaClient {
     private String ollamaModel;
 
 
-    public OllamaResponse generateSummary(final List<Article> articles) {
+    public OllamaResponse generateSummary(final List<Article> articles , final boolean isRender) {
         final RestTemplate restTemplate = new RestTemplate();
 
-        final String prompt = getPrompt(articles);
+        final String prompt = getPrompt(articles , isRender);
 
         final OllamaRequest requestPayload = OllamaRequest.builder()
                 .prompt(prompt)
@@ -52,13 +52,22 @@ public class OllamaClient {
         return new HttpEntity<>(requestPayload, headers);
     }
 
-    private String getPrompt(final List<Article> articles) {
+    private String getPrompt(final List<Article> articles , final boolean isRender) {
         final StringBuilder promptBuilder = new StringBuilder();
 
-        promptBuilder.append("You are a news summarizes. " +
-                "Summarize the top global news stories from today in a concise and informative way. " +
-                "Focus on major events, political developments, economic updates , and major technology or" +
-                "science breakthroughs. Keep the summary clear , objective, and easy to read, like a daily news brief. ");
+        if(!isRender){
+            promptBuilder.append("You are a news summarizes. " +
+                    "Summarize the top global news stories from today in a concise and informative way. " +
+                    "Focus on major events, political developments, economic updates , and major technology or" +
+                    "science breakthroughs. Keep the summary clear , objective, and easy to read, like a daily news brief. ");
+        }else{
+            promptBuilder.append("You are an expert HTML generator. " +
+                    "Summarize the following news articles and return only the full HTML code for a complete webpage. " +
+                    "Make the page look clean and readable using inline css or basic embedded styles." +
+                    "Do not include any explanations , introductions , or markdown formatting - " +
+                    "only raw HTML code that can be copied and run in browser. Do not add markdown such as ```html \n\n");
+        }
+
 
         for(Article article : articles){
             promptBuilder

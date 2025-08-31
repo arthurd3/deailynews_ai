@@ -22,12 +22,12 @@ public class NewsBriefService {
         this.ollamaClient = ollamaClient;
     }
 
-    public NewsSummaryResponse generateGeneralNewsBrief() {
+    public NewsSummaryResponse generateGeneralNewsBrief(final boolean isRender) {
         final NewsApiResponse newsApiResponse = newsApiClient.getTopHeadlines();
         log.info("Top Headlines: {}", newsApiResponse);
 
         final OllamaResponse ollamaResponse =
-                ollamaClient.generateSummary(newsApiResponse.getArticles());
+                ollamaClient.generateSummary(newsApiResponse.getArticles() , isRender);
 
         return NewsSummaryResponse.builder()
                 .createdAt(LocalDate.now())
