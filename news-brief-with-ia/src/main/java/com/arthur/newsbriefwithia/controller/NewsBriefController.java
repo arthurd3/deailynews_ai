@@ -22,13 +22,13 @@ public class NewsBriefController {
 
     @GetMapping(value = "/general-brief" , produces = MediaType.APPLICATION_JSON_VALUE)
     public NewsSummaryResponse generalBrief(){
-        return newsBriefService.generateGeneralNewsBrief();
+        return newsBriefService.generateGeneralNewsBrief(false);
     }
 
-//    @GetMapping(value = "/general-brief/render" , produces = MediaType.TEXT_HTML_VALUE)
-//    public NewsSummaryResponse generalBrief(){
-//        return newsBriefService.generateGeneralNewsBrief();
-//    }
+    @GetMapping(value = "/general-brief/render" , produces = MediaType.TEXT_HTML_VALUE)
+    public NewsSummaryResponse generalBriefUI(){
+        return newsBriefService.generateGeneralNewsBrief(true);
+    }
 
 
 }
