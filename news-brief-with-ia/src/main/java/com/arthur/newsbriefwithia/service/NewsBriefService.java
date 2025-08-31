@@ -25,6 +25,7 @@ public class NewsBriefService {
 
     @Cacheable(value = "newsBriefCache" , key = "#root.method.name")
     public NewsSummaryResponse generateGeneralNewsBrief(final boolean isRender) {
+
         final NewsApiResponse newsApiResponse = newsApiClient.getTopHeadlines();
         log.info("Top Headlines: {}", newsApiResponse);
 
