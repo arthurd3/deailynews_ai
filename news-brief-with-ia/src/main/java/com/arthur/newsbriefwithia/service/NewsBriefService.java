@@ -6,6 +6,7 @@ import com.arthur.newsbriefwithia.dto.NewsApiResponse;
 import com.arthur.newsbriefwithia.dto.NewsSummaryResponse;
 import com.arthur.newsbriefwithia.dto.OllamaResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -22,6 +23,7 @@ public class NewsBriefService {
         this.ollamaClient = ollamaClient;
     }
 
+    @Cacheable(value = "newsBriefCache" , key = "#root.method.name")
     public NewsSummaryResponse generateGeneralNewsBrief(final boolean isRender) {
         final NewsApiResponse newsApiResponse = newsApiClient.getTopHeadlines();
         log.info("Top Headlines: {}", newsApiResponse);
