@@ -4,6 +4,7 @@ import com.arthur.newsbriefwithia.client.NewsApiClient;
 import com.arthur.newsbriefwithia.client.OllamaClient;
 import com.arthur.newsbriefwithia.dto.NewsApiResponse;
 import com.arthur.newsbriefwithia.dto.NewsSummaryResponse;
+import com.arthur.newsbriefwithia.dto.OllamaResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -26,11 +27,11 @@ public class NewsBriefService {
         log.info("Top Headlines: {}", newsApiResponse);
 
         final OllamaResponse ollamaResponse =
-                ollamaCliente.generateSummary(newsApiResponse.getArticles(), false);
+                ollamaClient.generateSummary(newsApiResponse.getArticles());
 
         return NewsSummaryResponse.builder()
                 .createdAt(LocalDate.now())
-                .summary("This placehoard")
+                .summary(ollamaResponse.getResponse())
                 .build();
     }
 }
