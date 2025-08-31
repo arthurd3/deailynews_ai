@@ -1,9 +1,14 @@
 package com.arthur.newsbriefwithia.client;
 
 import com.arthur.newsbriefwithia.dto.Article;
+import com.arthur.newsbriefwithia.dto.OllamaRequest;
 import com.arthur.newsbriefwithia.dto.OllamaResponse;
 import org.springframework.beans.factory.annotation.Value;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -25,7 +30,26 @@ public class OllamaClient {
 
         final String prompt = getPrompt(articles);
 
-        final OllamaRequest requestPayload = O
+        final OllamaRequest requestPayload = OllamaRequest.builder()
+                .prompt(prompt)
+                .model(ollamaModel)
+                .stream(false)
+                .build();
+
+        final HttpEntity<OllamaRequest> requestEntity = getHttpEntity(requestPayload);
+
+        final ResponseEntity<OllamaResponse> response =
+                restTemplate.postForEntity(ollamaApiUrl, requestEntity, OllamaResponse.class);
+
+        log.info("Ollama request response: {}", response.getBody());
+
+        return response.getBody();
+    }
+
+    public static HttpEntity<OllamaRequest> getHttpEntity(final OllamaRequest requestPayload) {
+        final HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        return new HttpEntity<>(requestPayload, headers);
     }
 
     private String getPrompt(final List<Article> articles) {
