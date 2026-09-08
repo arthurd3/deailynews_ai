@@ -1,7 +1,6 @@
 # The build context is now the repository root, so keep everything the image does
 # not need out of it - a smaller context means faster builds and fewer cache misses.
 target/
-docs/
 .git/
 .github/
 .idea/

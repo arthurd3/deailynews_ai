@@ -20,9 +20,13 @@ class ModularityTests {
         MODULES.verify();
     }
 
+    /**
+     * Regenerates the C4 diagrams and module canvases from the code, into the build
+     * directory rather than the repository - they are output, not source.
+     */
     @Test
     void writesModuleDocumentation() {
-        new Documenter(MODULES, Documenter.Options.defaults().withOutputFolder("docs/modules"))
+        new Documenter(MODULES, Documenter.Options.defaults().withOutputFolder("target/modules"))
                 .writeModulesAsPlantUml()
                 .writeIndividualModulesAsPlantUml()
                 .writeModuleCanvases();
