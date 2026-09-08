@@ -9,7 +9,7 @@ No hosted AI provider, no data leaving the box.
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-6db33f?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
 [![Spring AI](https://img.shields.io/badge/Spring%20AI-2.0.1-6db33f?logo=spring&logoColor=white)](https://spring.io/projects/spring-ai)
 [![Ollama](https://img.shields.io/badge/Ollama-mistral:7b-000?logo=ollama&logoColor=white)](https://ollama.com/)
-[![Tests](https://img.shields.io/badge/tests-46%20passing-2ea44f)](#testing)
+[![Tests](https://img.shields.io/badge/tests-60-2ea44f)](#testing)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 <img src=".github/assets/brief-light.jpg" alt="The daily brief: a headline, an overview, and one card per story" width="820">
@@ -46,9 +46,12 @@ both render from the same typed value.
 |---|---|
 | **Spring Boot 4.1.1**, Java 21 | Virtual threads — almost all wall-clock time here is spent waiting on two network calls |
 | **Spring Modulith 2.1.1** | Module boundaries fail the build instead of relying on code review |
-| **Spring AI 2.0.1** | Typed structured output; swapping model provider is configuration, not a rewrite |
+| **Spring AI 2.0.1** | Typed structured output; Ollama or Anthropic, chosen by one property |
 | **Thymeleaf + htmx 2.0.10** | Server-rendered, works with JavaScript off, no build step and no CDN |
+| **Postgres + Spring Data JDBC** | The archive outlives the process; Flyway owns the schema |
+| **Spring Modulith events** | The archive is fed by an event, so `brief` never learns it exists |
 | **Caffeine** | Headlines and briefs cost wildly different amounts, so they get separate TTLs |
+| **Bucket4j** | A per-client budget; Resilience4j's limiter is per-instance, the wrong shape |
 | **Spring `@Retryable`** + Resilience4j | Retry is built into Framework 7; breakers add the fail-fast the framework lacks |
 | **RFC 9457 `ProblemDetail`** | One predictable error shape for the API — and HTML pages for the browser |
 
@@ -61,8 +64,9 @@ cp .env.example .env      # add your free key from https://newsapi.org/register
 docker compose up
 ```
 
-Compose starts Ollama, pulls `mistral:7b` into a named volume, waits for that to finish, and only
-then starts the app. First run downloads a few gigabytes; later runs reuse the volume.
+Compose starts Postgres and Ollama, pulls `mistral:7b` into a named volume, waits for both to be
+ready, and only then starts the app. First run downloads a few gigabytes; later runs reuse the
+volumes, and the archive survives `docker compose down`.
 
 Then open **<http://localhost:8080>**.
 
@@ -72,6 +76,9 @@ Then open **<http://localhost:8080>**.
 ```bash
 ollama serve &
 ollama pull mistral:7b
+
+docker run -d --name newsbrief-pg -p 5432:5432 \
+  -e POSTGRES_DB=newsbrief -e POSTGRES_USER=newsbrief -e POSTGRES_PASSWORD=newsbrief postgres:17-alpine
 
 NEWS_API_KEY=your_key ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
 ```
@@ -89,12 +96,15 @@ deployed instance needs a paid key.
 |---|---|
 | `GET /` | the app |
 | `GET /briefs/daily` | the brief as a page |
+| `GET /archive` | briefs from previous days |
 | `GET /about` | how it is built, inside the app |
 | `GET /api/v1/briefs/daily` | `application/json` or `text/markdown`, by `Accept` |
+| `GET /api/v1/archive` | recently archived briefs, newest first |
 | `GET /swagger-ui.html` | interactive API reference |
 
 Optional `country` (ISO 3166-1 alpha-2) and `category` (`business`, `entertainment`, `general`,
-`health`, `science`, `sports`, `technology`).
+`health`, `science`, `sports`, `technology`). Both brief endpoints are rate limited per client and
+answer `429` with `Retry-After` once the budget is spent.
 
 ```bash
 curl -s -H 'Accept: application/json' localhost:8080/api/v1/briefs/daily | jq
@@ -142,7 +152,7 @@ precedence over the global one for the page routes.
 
 ## Architecture
 
-One deployable artifact, four modules with **enforced** boundaries. Each exposes a small public API
+One deployable artifact, five modules with **enforced** boundaries. Each exposes a small public API
 and hides the rest in an `internal` package siblings cannot import.
 
 ```mermaid
@@ -154,22 +164,25 @@ flowchart TB
         brief["<b>brief</b><br/>orchestration · pages · API"]
         news["<b>news</b><br/>NewsProvider port"]
         summ["<b>summarization</b><br/>SummaryGenerator port"]
+        arch["<b>archive</b><br/>past briefs"]
         shared["<b>shared</b> (open)<br/>cache · errors · resilience"]
     end
 
     brief --> news
     brief --> summ
+    brief -. "BriefGenerated event" .-> arch
     news -.-> shared
     summ -.-> shared
     brief -.-> shared
+    arch ==> db[("Postgres")]
 
     news ==>|X-Api-Key header| newsapi[("NewsAPI")]
     summ ==>|Spring AI ChatClient| ollama[("Ollama<br/>mistral:7b")]
 
     classDef m fill:#eef4ff,stroke:#4a6fa5,color:#12233d
     classDef e fill:#fff4e6,stroke:#c98a2e,color:#3d2a12
-    class brief,news,summ,shared m
-    class newsapi,ollama e
+    class brief,news,summ,arch,shared m
+    class newsapi,ollama,db e
 ```
 
 **`news` and `summarization` do not know about each other.** The summarizer takes its own
@@ -189,6 +202,29 @@ that `brief` composes. Either upstream can be replaced without touching the othe
    a typed `NewsSummary`.
 5. **`NewsBriefService`** assembles a `DailyBrief` with provenance and a timestamp.
 6. The controller renders it — or returns just the fragment when htmx is driving the request.
+
+</details>
+
+<details>
+<summary><b>How the archive stays decoupled</b></summary>
+
+`brief` publishes a `BriefGenerated` event. `archive` listens with `@ApplicationModuleListener`
+and writes a row. Nothing in `brief` imports anything from `archive` — archiving could be deleted
+tomorrow and the brief would still generate.
+
+Spring Modulith writes the publication into an event log **inside the publishing transaction**.
+If the listener never completes — process killed mid-write, database briefly unreachable — the
+publication stays incomplete and is retried on the next start instead of being silently lost.
+That is the difference between an event and a fire-and-forget method call.
+
+Two details worth knowing:
+
+- The event is published from a small transactional bean of its own, **not** from the method that
+  generates the brief. Generation is tens of seconds of inference; wrapping that in a database
+  transaction would hold a connection open for the whole time.
+- The archive owns its own `/archive` routes. Having `brief` read the archive back would close a
+  cycle — `archive` already depends on `brief` for the event type — and `ModularityTests` fails
+  the build on cycles.
 
 </details>
 
@@ -275,6 +311,7 @@ src/main/
 │       └── internal/     orchestration, markdown rendering
 └── resources/
     ├── application.yml   base + dev + docker profiles
+    ├── db/migration/     Flyway schema for the archive
     ├── prompts/          system and user prompt templates
     ├── static/           app.css · app.js
     └── templates/        pages, fragments, error pages
@@ -290,7 +327,9 @@ src/main/
 ./mvnw verify
 ```
 
-46 tests, no network required.
+60 tests. The 45 unit and slice tests need nothing; the 15 that exercise the archive and the full
+context start a Postgres through Testcontainers, and **skip with a reason** when Docker is
+unavailable rather than reporting a broken suite.
 
 | Suite | Covers |
 |---|---|
@@ -302,6 +341,10 @@ src/main/
 | `NewsBriefControllerTest` | JSON and markdown negotiation, problem-detail shape |
 | `BriefPageControllerTest` | Pages, htmx fragments, and **errors as HTML rather than JSON** |
 | `BriefCachingTest` | Cache-key correctness |
+| `BriefArchiveIntegrationTest` | An event published by `brief` becomes a row, against real Postgres |
+| `ClientRateLimitFilterTest` | Per-client budgets, `X-Forwarded-For`, paths left alone |
+| `BriefWarmupTest` | The scheduled job regenerates, and survives an upstream outage |
+| `SummarizationProviderSelectionTest` | Exactly one `ChatClient`, chosen by property |
 
 > `BriefCachingTest` exists because an earlier version cached on `#root.method.name`, a constant.
 > Every distinct request collided on one entry, so the first caller's brief was served to everyone.
@@ -309,13 +352,6 @@ src/main/
 Health, metrics and per-upstream circuit-breaker state are at `/actuator/health`.
 
 ---
-
-## Roadmap
-
-- [ ] Scheduled generation, so the morning brief is warm before the first request
-- [ ] Persistence, to keep an archive of past briefs
-- [ ] Per-client rate limiting on the public endpoint
-- [ ] A second `SummaryGenerator` adapter for a hosted model, chosen by configuration
 
 ## License
 

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Archive')}"></head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<div class="shell">
+    <header th:replace="~{fragments/layout :: masthead('archive')}"></header>
+
+    <main id="main">
+        <p class="eyebrow">Archive</p>
+        <h1 class="brief__headline">Briefs from previous days</h1>
+        <p class="brief__overview">
+            Every generated brief is kept, so it survives a restart.
+            <span th:text="${total}">0</span> stored so far.
+        </p>
+
+        <p class="notice" th:if="${briefs.isEmpty()}">
+            Nothing archived yet. Generate a brief and it will show up here.
+        </p>
+
+        <section class="topic" th:each="item : ${briefs}">
+            <span class="topic__category">
+                <time th:datetime="${item.day()}" th:text="${item.day()}">2026-09-08</time>
+                &middot; <span th:text="${item.country()}">us</span><span
+                    th:if="${item.category()}" th:text="' · ' + ${item.category()}"></span>
+            </span>
+            <h2 class="topic__title" th:text="${item.headline()}">Headline</h2>
+            <p class="topic__summary" th:text="${item.overview()}">Overview.</p>
+            <p class="colophon" th:if="${!item.topics().isEmpty()}">
+                <span th:text="${item.topics().size()}">0</span> topics &middot;
+                <span th:text="${#strings.listJoin(item.topics().![title()], ' · ')}">titles</span>
+            </p>
+        </section>
+    </main>
+
+    <footer th:replace="~{fragments/layout :: colophon}"></footer>
+</div>
+</body>
+</html>

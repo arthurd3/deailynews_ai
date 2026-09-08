@@ -47,12 +47,10 @@ class SpringAiSummaryGeneratorTest {
     }
 
     private SpringAiSummaryGenerator generatorWith(int maxDocuments) {
-        ChatClient.Builder builder = mock(ChatClient.Builder.class);
-        when(builder.defaultSystem(any(Resource.class))).thenReturn(builder);
-        when(builder.build()).thenReturn(chatClient);
-
-        return new SpringAiSummaryGenerator(builder, new SummarizationProperties(maxDocuments),
-                prompt("system"), prompt("brief {articles}"));
+        return new SpringAiSummaryGenerator(
+                chatClient,
+                new SummarizationProperties(maxDocuments, SummarizationProperties.Provider.OLLAMA),
+                prompt("brief {articles}"));
     }
 
     @Test

@@ -13,6 +13,7 @@ import com.arthur.newsbrief.summarization.NewsSummary;
 import com.arthur.newsbrief.summarization.SourceDocument;
 import com.arthur.newsbrief.summarization.SummaryGenerator;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -38,7 +39,8 @@ class NewsBriefServiceTest {
                         new Article("Rates held", "No change this month.", "https://example.test/1",
                                 "Example Wire", Instant.parse("2026-09-08T06:00:00Z"))),
                         Instant.parse("2026-09-08T07:00:00Z")),
-                summarizer);
+                summarizer,
+                Mockito.mock(BriefEventPublisher.class));
 
         DailyBrief brief = service.dailyBrief(QUERY);
 
@@ -64,7 +66,8 @@ class NewsBriefServiceTest {
                         new Article("First", "One", null, null, null),
                         new Article("Second", null, null, null, null)),
                         Instant.now()),
-                summarizer);
+                summarizer,
+                Mockito.mock(BriefEventPublisher.class));
 
         service.dailyBrief(QUERY);
 
@@ -79,7 +82,8 @@ class NewsBriefServiceTest {
                 query -> new Headlines(query, List.of(), Instant.now()),
                 documents -> {
                     throw new AssertionError("the model must not be called without material");
-                });
+                },
+                Mockito.mock(BriefEventPublisher.class));
 
         assertThatThrownBy(() -> service.dailyBrief(QUERY))
                 .isInstanceOf(NewsUnavailableException.class)
@@ -94,7 +98,8 @@ class NewsBriefServiceTest {
                 },
                 documents -> {
                     throw new AssertionError("unreachable");
-                });
+                },
+                Mockito.mock(BriefEventPublisher.class));
 
         assertThatThrownBy(() -> service.dailyBrief(QUERY))
                 .isInstanceOf(NewsUnavailableException.class);

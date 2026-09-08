@@ -7,6 +7,20 @@ spring:
   config:
     import: "optional:file:./.env[.properties]"
 
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/newsbrief}
+    username: ${DB_USERNAME:newsbrief}
+    password: ${DB_PASSWORD:newsbrief}
+
+  flyway:
+    enabled: true            # owns the archive schema; see db/migration
+
+  modulith:
+    events:
+      jdbc:
+        schema-initialization:
+          enabled: true      # the event publication log creates its own table
+
   mvc:
     problemdetails:
       enabled: true          # RFC 9457 responses for Spring MVC's own exceptions
@@ -21,6 +35,14 @@ spring:
       read-timeout: 90s      # generous default: local inference is slow. NewsAPI overrides it.
 
   ai:
+    anthropic:
+      # Only consulted when newsbrief.summarization.provider=anthropic. Left empty so the
+      # application starts normally for everyone running the default local setup.
+      api-key: ${ANTHROPIC_API_KEY:}
+      chat:
+        options:
+          model: ${ANTHROPIC_MODEL:claude-sonnet-4-5}
+          temperature: 0.2
     ollama:
       base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
       init:
@@ -44,6 +66,26 @@ newsbrief:
 
   summarization:
     max-documents: 10
+    # ollama keeps everything on this machine; anthropic is the documented fallback for when
+    # a small local model will not honour the structured-output schema.
+    provider: ${SUMMARIZATION_PROVIDER:ollama}
+
+  # Generating a brief costs a NewsAPI round trip plus tens of seconds of inference. Warming
+  # the cache means the first visitor of the day does not pay for it.
+  warmup:
+    enabled: ${WARMUP_ENABLED:true}
+    cron: "0 0 6 * * *"
+    zone: UTC
+
+  # Per-client budget. @ConcurrencyLimit stops parallel inference; this stops one client
+  # walking through categories in sequence and paying for a fresh model run each time.
+  rate-limit:
+    enabled: true
+    capacity: 30
+    period: 1m
+    paths:
+      - /api/v1/briefs
+      - /briefs
 
   caching:
     default-spec: "maximumSize=100,expireAfterWrite=10m"
@@ -113,6 +155,14 @@ spring:
     activate:
       on-profile: docker
   ai:
+    anthropic:
+      # Only consulted when newsbrief.summarization.provider=anthropic. Left empty so the
+      # application starts normally for everyone running the default local setup.
+      api-key: ${ANTHROPIC_API_KEY:}
+      chat:
+        options:
+          model: ${ANTHROPIC_MODEL:claude-sonnet-4-5}
+          temperature: 0.2
     ollama:
       base-url: http://ollama:11434
 

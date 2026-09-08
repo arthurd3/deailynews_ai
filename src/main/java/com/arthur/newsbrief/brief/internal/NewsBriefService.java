@@ -34,10 +34,13 @@ public class NewsBriefService {
 
     private final NewsProvider newsProvider;
     private final SummaryGenerator summaryGenerator;
+    private final BriefEventPublisher events;
 
-    NewsBriefService(NewsProvider newsProvider, SummaryGenerator summaryGenerator) {
+    NewsBriefService(NewsProvider newsProvider, SummaryGenerator summaryGenerator,
+                     BriefEventPublisher events) {
         this.newsProvider = newsProvider;
         this.summaryGenerator = summaryGenerator;
+        this.events = events;
     }
 
     /**
@@ -82,7 +85,7 @@ public class NewsBriefService {
 
         NewsSummary summary = summaryGenerator.summarize(asSourceDocuments(headlines.articles()));
 
-        return new DailyBrief(
+        DailyBrief brief = new DailyBrief(
                 summary.headline(),
                 summary.overview(),
                 summary.topics().stream()
@@ -91,6 +94,10 @@ public class NewsBriefService {
                 new DailyBrief.Sources(
                         query.country(), query.category(), headlines.size(), headlines.retrievedAt()),
                 Instant.now());
+
+        // Announced only on a real generation - a cache hit never reaches this method.
+        events.briefGenerated(query, brief);
+        return brief;
     }
 
     private static List<SourceDocument> asSourceDocuments(List<Article> articles) {

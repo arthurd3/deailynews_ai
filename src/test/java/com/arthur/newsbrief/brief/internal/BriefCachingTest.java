@@ -12,7 +12,9 @@ import com.arthur.newsbrief.news.NewsProvider;
 import com.arthur.newsbrief.summarization.NewsSummary;
 import com.arthur.newsbrief.summarization.SummaryGenerator;
 import org.junit.jupiter.api.BeforeEach;
+import com.arthur.newsbrief.PostgresBackedTest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIf;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.cache.CacheManager;
@@ -30,9 +32,11 @@ import static org.mockito.BDDMockito.given;
  * constant. Every distinct request therefore collided on one entry and the first
  * caller's brief was served to everybody. These tests fail if that ever comes back.
  */
+@EnabledIf(value = "com.arthur.newsbrief.PostgresBackedTest#databaseIsReachable",
+        disabledReason = "Docker unavailable, or its published ports do not forward traffic here")
 @SpringBootTest(properties = "newsbrief.news-api.key=test-key")
 @ActiveProfiles("test")
-class BriefCachingTest {
+class BriefCachingTest extends PostgresBackedTest {
 
     @Autowired
     private NewsBriefService newsBriefService;

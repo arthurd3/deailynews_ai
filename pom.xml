@@ -32,6 +32,7 @@
         <resilience4j.version>2.4.0</resilience4j.version>
         <archunit.version>1.4.2</archunit.version>
         <htmx.version>2.0.10</htmx.version>
+        <bucket4j.version>8.19.0</bucket4j.version>
         <wiremock-spring-boot.version>4.2.3</wiremock-spring-boot.version>
     </properties>
 
@@ -85,16 +86,45 @@
             <version>${htmx.version}</version>
         </dependency>
 
-        <!-- AI -->
+        <!-- AI. Two providers behind one port; newsbrief.summarization.provider picks. -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-model-ollama</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-model-anthropic</artifactId>
+        </dependency>
 
-        <!-- Modularity -->
+        <!-- Modularity. The JDBC starter adds the event publication registry: events are
+             written to a log inside the publishing transaction, so a listener that never ran
+             (crash, restart) is replayed instead of silently lost. -->
         <dependency>
             <groupId>org.springframework.modulith</groupId>
             <artifactId>spring-modulith-starter-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.modulith</groupId>
+            <artifactId>spring-modulith-starter-jdbc</artifactId>
+        </dependency>
+
+        <!-- Persistence -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jdbc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
         </dependency>
 
         <!-- Caching -->
@@ -116,6 +146,13 @@
             <groupId>io.github.resilience4j</groupId>
             <artifactId>resilience4j-spring-boot4</artifactId>
             <version>${resilience4j.version}</version>
+        </dependency>
+        <!-- Per-client rate limiting. Bucket4j's core is a plain library with no Spring
+             coupling, so it carries no Boot 4 compatibility risk; the filter is ours. -->
+        <dependency>
+            <groupId>com.bucket4j</groupId>
+            <artifactId>bucket4j_jdk17-core</artifactId>
+            <version>${bucket4j.version}</version>
         </dependency>
         <!-- Resilience4j implements @CircuitBreaker as an @Aspect. Without AspectJ on the
              classpath its auto-configuration is skipped silently and the annotation does
@@ -143,6 +180,19 @@
             <artifactId>spring-modulith-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Testcontainers 2.x renamed the modules: the coordinate is testcontainers-postgresql,
+             and the container class moved to org.testcontainers.postgresql. Using the 1.x
+             coordinate leaves @ServiceConnection with "No ConnectionDetails found". -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.wiremock.integrations</groupId>
             <artifactId>wiremock-spring-boot</artifactId>
@@ -166,6 +216,18 @@
                     <compilerArgs>
                         <arg>-parameters</arg>
                     </compilerArgs>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <environmentVariables>
+                        <!-- Ryuk, the Testcontainers resource reaper, cannot be reached on
+                             rootless Docker setups. Containers are still stopped when the JVM
+                             exits normally; this only removes the safety net for a hard kill. -->
+                        <TESTCONTAINERS_RYUK_DISABLED>true</TESTCONTAINERS_RYUK_DISABLED>
+                    </environmentVariables>
                 </configuration>
             </plugin>
             <plugin>

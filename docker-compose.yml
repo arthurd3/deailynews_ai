@@ -1,6 +1,25 @@
 name: newsbrief
 
 services:
+  # Holds the brief archive and Spring Modulith's event publication log. The log is what makes
+  # archiving reliable: a listener that never ran is replayed instead of silently lost.
+  postgres:
+    image: postgres:17-alpine
+    container_name: newsbrief-postgres
+    environment:
+      POSTGRES_DB: newsbrief
+      POSTGRES_USER: newsbrief
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-newsbrief}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U newsbrief -d newsbrief"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
   # The language model runtime. Models live in a named volume so they survive a
   # `docker compose down` - re-pulling several gigabytes on every restart is not a
   # reasonable developer experience.
@@ -46,13 +65,19 @@ services:
     depends_on:
       ollama-init:
         condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
     ports:
       - "8080:8080"
     environment:
       SPRING_PROFILES_ACTIVE: docker
       NEWS_API_KEY: ${NEWS_API_KEY:?NEWS_API_KEY is required - copy .env.example to .env and add your key}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-mistral:7b}
+      DB_PASSWORD: ${DB_PASSWORD:-newsbrief}
+      SUMMARIZATION_PROVIDER: ${SUMMARIZATION_PROVIDER:-ollama}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     restart: unless-stopped
 
 volumes:
   ollama-models:
+  postgres-data:

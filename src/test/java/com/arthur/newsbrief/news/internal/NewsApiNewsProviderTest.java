@@ -5,7 +5,9 @@ import com.arthur.newsbrief.news.HeadlinesQuery;
 import com.arthur.newsbrief.news.NewsProvider;
 import com.arthur.newsbrief.news.NewsUnavailableException;
 import com.github.tomakehurst.wiremock.WireMockServer;
+import com.arthur.newsbrief.PostgresBackedTest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIf;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.cache.CacheManager;
@@ -29,10 +31,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * where the original implementation went wrong, by assuming a well-formed response and
  * dereferencing whatever came back.
  */
+@EnabledIf(value = "com.arthur.newsbrief.PostgresBackedTest#databaseIsReachable",
+        disabledReason = "Docker unavailable, or its published ports do not forward traffic here")
 @SpringBootTest(properties = "newsbrief.news-api.key=test-key")
 @ActiveProfiles("test")
 @EnableWireMock(@ConfigureWireMock(name = "newsapi", baseUrlProperties = "newsbrief.news-api.base-url"))
-class NewsApiNewsProviderTest {
+class NewsApiNewsProviderTest extends PostgresBackedTest {
 
     private static final String TOP_HEADLINES = "/top-headlines";
 

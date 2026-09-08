@@ -26,6 +26,7 @@
     <a class="masthead__brand" th:href="@{/}">News<span>Brief</span> AI</a>
     <nav class="masthead__nav" aria-label="Primary">
         <a th:href="@{/}" th:attrappend="aria-current=${current == 'home' ? 'page' : null}">Brief</a>
+        <a th:href="@{/archive}" th:attrappend="aria-current=${current == 'archive' ? 'page' : null}">Archive</a>
         <a th:href="@{/about}" th:attrappend="aria-current=${current == 'about' ? 'page' : null}">About</a>
         <a th:href="@{/swagger-ui.html}">API</a>
         <button type="button" class="theme-toggle" data-theme-toggle

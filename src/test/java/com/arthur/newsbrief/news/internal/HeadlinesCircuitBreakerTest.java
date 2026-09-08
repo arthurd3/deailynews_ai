@@ -7,7 +7,9 @@ import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.ResponseDefinitionBuilder;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import com.arthur.newsbrief.PostgresBackedTest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIf;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
@@ -28,6 +30,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * sat outside the cache, an upstream outage would also suppress results the application
  * already holds — the opposite of what a cache is for during an outage.
  */
+@EnabledIf(value = "com.arthur.newsbrief.PostgresBackedTest#databaseIsReachable",
+        disabledReason = "Docker unavailable, or its published ports do not forward traffic here")
 @SpringBootTest(properties = {
         "newsbrief.news-api.key=test-key",
         "resilience4j.circuitbreaker.instances.headlines.slidingWindowSize=2",
@@ -37,7 +41,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 })
 @ActiveProfiles("test")
 @EnableWireMock(@ConfigureWireMock(name = "newsapi", baseUrlProperties = "newsbrief.news-api.base-url"))
-class HeadlinesCircuitBreakerTest {
+class HeadlinesCircuitBreakerTest extends PostgresBackedTest {
 
     private static final String TOP_HEADLINES = "/top-headlines";
     private static final HeadlinesQuery CACHED = HeadlinesQuery.ofCountry("ca");

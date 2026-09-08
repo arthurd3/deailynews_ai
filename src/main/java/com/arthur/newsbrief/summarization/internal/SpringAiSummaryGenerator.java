@@ -24,6 +24,10 @@ import org.springframework.stereotype.Component;
  *
  * <p>Prompts live in {@code resources/prompts} so wording can be tuned without a
  * recompile, and reviewed as text rather than as escaped string concatenation.
+ *
+ * <p>Which model is behind the injected {@link ChatClient} is decided by
+ * {@link SummarizationChatClientConfiguration}. This class does not know or care — swapping
+ * Ollama for a hosted provider changes configuration, not code.
  */
 @Component
 class SpringAiSummaryGenerator implements SummaryGenerator {
@@ -36,11 +40,10 @@ class SpringAiSummaryGenerator implements SummaryGenerator {
     private final SummarizationProperties properties;
     private final Resource userPrompt;
 
-    SpringAiSummaryGenerator(ChatClient.Builder chatClientBuilder,
+    SpringAiSummaryGenerator(ChatClient chatClient,
                              SummarizationProperties properties,
-                             @Value("classpath:prompts/system.st") Resource systemPrompt,
                              @Value("classpath:prompts/daily-brief.st") Resource userPrompt) {
-        this.chatClient = chatClientBuilder.defaultSystem(systemPrompt).build();
+        this.chatClient = chatClient;
         this.properties = properties;
         this.userPrompt = userPrompt;
     }
