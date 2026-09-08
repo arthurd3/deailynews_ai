@@ -1,0 +1,122 @@
+spring:
+  application:
+    name: NewsBrief AI
+
+  # Local development reads secrets from ./.env; in every other environment they arrive
+  # as real environment variables. "optional:" keeps startup working when the file is absent.
+  config:
+    import: "optional:file:./.env[.properties]"
+
+  mvc:
+    problemdetails:
+      enabled: true          # RFC 9457 responses for Spring MVC's own exceptions
+
+  threads:
+    virtual:
+      enabled: true          # requests spend most of their life waiting on NewsAPI and Ollama
+
+  http:
+    clients:
+      connect-timeout: 5s
+      read-timeout: 90s      # generous default: local inference is slow. NewsAPI overrides it.
+
+  ai:
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      init:
+        pull-model-strategy: never   # the model is provisioned by docker-compose, not at boot
+      chat:
+        options:
+          model: ${OLLAMA_MODEL:mistral:7b}
+          temperature: 0.2           # a news brief should be reproducible, not creative
+
+newsbrief:
+  brief:
+    # What "no country requested" means is an API decision, so it lives with the API.
+    default-country: us
+
+  news-api:
+    key: ${NEWS_API_KEY:}
+    base-url: https://newsapi.org/v2
+    max-articles: 20
+    connect-timeout: 3s
+    read-timeout: 10s
+
+  summarization:
+    max-documents: 10
+
+  caching:
+    default-spec: "maximumSize=100,expireAfterWrite=10m"
+    caches:
+      # Headlines move quickly and cost one cheap HTTP call.
+      headlines: "maximumSize=64,expireAfterWrite=5m"
+      # A brief costs seconds of local inference, so it is worth holding on to.
+      briefs: "maximumSize=64,expireAfterWrite=30m"
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 60
+        waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 3
+        registerHealthIndicator: true
+    instances:
+      headlines:
+        baseConfig: default
+      ollama:
+        baseConfig: default
+        waitDurationInOpenState: 60s   # restarting a model server takes longer than an API recovering
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,caches,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+  health:
+    circuitbreakers:
+      enabled: true
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  level:
+    com.arthur.newsbrief: INFO
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+logging:
+  level:
+    com.arthur.newsbrief: DEBUG
+
+management:
+  endpoint:
+    health:
+      show-details: always
+
+---
+spring:
+  config:
+    activate:
+      on-profile: docker
+  ai:
+    ollama:
+      base-url: http://ollama:11434
+
+management:
+  endpoint:
+    health:
+      show-details: always
