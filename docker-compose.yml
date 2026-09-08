@@ -1,0 +1,58 @@
+name: newsbrief
+
+services:
+  # The language model runtime. Models live in a named volume so they survive a
+  # `docker compose down` - re-pulling several gigabytes on every restart is not a
+  # reasonable developer experience.
+  ollama:
+    image: ollama/ollama:latest
+    container_name: newsbrief-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  # One-shot: pulls the model, then exits. The app waits for it to finish so the
+  # first request does not time out behind a multi-gigabyte download.
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: newsbrief-ollama-init
+    depends_on:
+      ollama:
+        condition: service_healthy
+    volumes:
+      - ollama-models:/root/.ollama
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-mistral:7b}
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      'echo "Pulling $${OLLAMA_MODEL} (this can take several minutes on a cold start)..." &&
+       ollama pull "$${OLLAMA_MODEL}" &&
+       echo "Model ready."'
+    restart: "no"
+
+  app:
+    build:
+      context: .
+    container_name: newsbrief-app
+    depends_on:
+      ollama-init:
+        condition: service_completed_successfully
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      NEWS_API_KEY: ${NEWS_API_KEY:?NEWS_API_KEY is required - copy .env.example to .env and add your key}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-mistral:7b}
+    restart: unless-stopped
+
+volumes:
+  ollama-models:
