@@ -1,0 +1,30 @@
+# Test defaults. Nothing here should reach a real network.
+newsbrief:
+  news-api:
+    base-url: http://localhost:0    # replaced per-test by the WireMock stub
+    read-timeout: 2s
+    connect-timeout: 1s
+  caching:
+    # Caching stays enabled because two tests assert on it, but entries must not
+    # survive long enough to leak between test classes.
+    caches:
+      headlines: "maximumSize=32,expireAfterWrite=30s"
+      briefs: "maximumSize=32,expireAfterWrite=30s"
+
+spring:
+  ai:
+    ollama:
+      base-url: http://localhost:0
+      init:
+        pull-model-strategy: never
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        # Never trip mid-suite; the retry and mapping behaviour is what is under test.
+        minimumNumberOfCalls: 1000
+
+logging:
+  level:
+    com.arthur.newsbrief: DEBUG
