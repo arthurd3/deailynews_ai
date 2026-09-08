@@ -1,0 +1,24 @@
+# Local secrets. Never commit; see .env.example for the template.
+.env
+.env.*
+!.env.example
+
+# Build output
+target/
+build/
+HELP.md
+.mvn/wrapper/maven-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+.settings/
+.classpath
+.project
+
+# OS
+.DS_Store
+Thumbs.db
