@@ -3,6 +3,7 @@ package com.arthur.newsbrief.brief;
 import java.time.Instant;
 import java.util.List;
 
+import com.arthur.newsbrief.brief.internal.BriefMarkdownRenderer;
 import com.arthur.newsbrief.brief.internal.BriefProperties;
 import com.arthur.newsbrief.brief.internal.NewsBriefService;
 import com.arthur.newsbrief.news.HeadlinesQuery;
@@ -13,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Import;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -27,6 +29,7 @@ import static org.mockito.Mockito.verify;
 /** Verifies the HTTP contract: content negotiation, validation and error shape. */
 @WebMvcTest(NewsBriefController.class)
 @EnableConfigurationProperties(BriefProperties.class)
+@Import(BriefMarkdownRenderer.class)
 class NewsBriefControllerTest {
 
     private static final String DAILY = "/api/v1/briefs/daily";
@@ -56,18 +59,24 @@ class NewsBriefControllerTest {
     }
 
     @Test
-    void servesARenderedPageWhenHtmlIsRequested() {
+    void servesMarkdownWhenMarkdownIsRequested() {
         given(newsBriefService.dailyBrief(any())).willReturn(BRIEF);
 
-        assertThat(mvc.get().uri(DAILY).accept(MediaType.TEXT_HTML))
+        assertThat(mvc.get().uri(DAILY).accept(MediaType.valueOf(BriefMarkdownRenderer.TEXT_MARKDOWN)))
                 .hasStatusOk()
-                .hasContentTypeCompatibleWith(MediaType.TEXT_HTML)
                 .bodyText()
-                // The same resource, rendered - not a second endpoint returning a
-                // string that the controller has to slice markdown fences off.
-                .contains("Markets steady")
-                .contains("The central bank paused.")
-                .contains("<!DOCTYPE html>");
+                // A third representation of the same resource, so the copy button in the UI
+                // fetches it rather than reassembling the text in JavaScript.
+                .contains("# Markets steady")
+                .contains("## Rates held")
+                .contains("The central bank paused.");
+    }
+
+    @Test
+    void doesNotServeHtmlFromTheApiResource() {
+        assertThat(mvc.get().uri(DAILY).accept(MediaType.TEXT_HTML))
+                .as("the browser-facing pages live outside /api/v1")
+                .hasStatus(406);
     }
 
     @Test

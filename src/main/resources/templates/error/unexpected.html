@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Something went wrong')}"></head>
+<body>
+<div class="shell">
+    <header th:replace="~{fragments/layout :: masthead('')}"></header>
+    <main id="main">
+        <div class="notice">
+            <h1>Something went wrong</h1>
+            <p>An unexpected error stopped this request. It has been logged.</p>
+            <p th:if="${detail}" th:text="${detail}"></p>
+            <p><a th:href="@{/}">Back to the brief</a></p>
+        </div>
+    </main>
+    <footer th:replace="~{fragments/layout :: colophon}"></footer>
+</div>
+</body>
+</html>

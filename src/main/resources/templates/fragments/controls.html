@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<!--/* Country and category pickers. This is a real GET form: without JavaScript it
+       navigates to /briefs/daily and the server renders the whole page. htmx upgrades
+       it in place, which is the only way to show progress during a slow generation. */-->
+<section th:fragment="controls" class="controls" aria-labelledby="controls-heading">
+    <h2 id="controls-heading" class="visually-hidden">Choose what to summarize</h2>
+
+    <form th:action="@{/briefs/daily}" method="get"
+          hx-get="/briefs/daily"
+          hx-target="#app"
+          hx-swap="innerHTML"
+          hx-indicator="#app"
+          hx-push-url="true">
+
+        <div class="controls__row">
+            <div class="field">
+                <label for="country">Country</label>
+                <input id="country" name="country" type="text" th:value="${country}"
+                       size="4" maxlength="2" pattern="[A-Za-z]{2}" autocomplete="country"
+                       aria-describedby="country-hint">
+            </div>
+
+            <div class="field">
+                <label for="category">Category</label>
+                <select id="category" name="category">
+                    <option value="" th:selected="${category == null}">All categories</option>
+                    <option th:each="option : ${categories}"
+                            th:value="${option}"
+                            th:text="${#strings.capitalize(option)}"
+                            th:selected="${option == category}">Business</option>
+                </select>
+            </div>
+
+            <button type="submit" class="button">Generate brief</button>
+        </div>
+
+        <p id="country-hint" class="visually-hidden">Two-letter ISO country code, for example us or gb.</p>
+    </form>
+
+    <ul class="chips">
+        <li>
+            <a class="chip" th:href="@{/briefs/daily(country=${country})}"
+               th:attrappend="aria-current=${category == null ? 'true' : null}"
+               hx-get="/briefs/daily" th:attr="hx-vals=|{&quot;country&quot;:&quot;${country}&quot;}|"
+               hx-target="#app" hx-swap="innerHTML" hx-indicator="#app"
+               hx-push-url="true">All</a>
+        </li>
+        <li th:each="option : ${categories}">
+            <a class="chip"
+               th:href="@{/briefs/daily(country=${country}, category=${option})}"
+               th:text="${#strings.capitalize(option)}"
+               th:attrappend="aria-current=${option == category ? 'true' : null}"
+               hx-get="/briefs/daily"
+               th:attr="hx-vals=|{&quot;country&quot;:&quot;${country}&quot;,&quot;category&quot;:&quot;${option}&quot;}|"
+               hx-target="#app" hx-swap="innerHTML" hx-indicator="#app"
+               hx-push-url="true">Business</a>
+        </li>
+    </ul>
+</section>
+
+</body>
+</html>

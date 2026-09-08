@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<!--/* Shared chrome. Pages pull these in with th:replace instead of a layout dialect,
+       which keeps the dependency list shorter for the little it would buy here. */-->
+<head th:fragment="head(pageTitle)">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <title th:text="${pageTitle} + ' · NewsBrief AI'">NewsBrief AI</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>📰</text></svg>">
+    <script>
+        /* Inline and synchronous on purpose: a deferred script would repaint the page in
+           the wrong theme first. Absent a stored choice, the CSS follows the system. */
+        try {
+            var saved = localStorage.getItem('newsbrief-theme');
+            if (saved) document.documentElement.dataset.theme = saved;
+        } catch (e) { /* storage blocked; the system preference still applies */ }
+    </script>
+    <script defer th:src="@{/webjars/htmx.org/2.0.10/dist/htmx.min.js}"></script>
+    <script defer th:src="@{/js/app.js}"></script>
+</head>
+<body>
+
+<header th:fragment="masthead(current)" class="masthead">
+    <a class="masthead__brand" th:href="@{/}">News<span>Brief</span> AI</a>
+    <nav class="masthead__nav" aria-label="Primary">
+        <a th:href="@{/}" th:attrappend="aria-current=${current == 'home' ? 'page' : null}">Brief</a>
+        <a th:href="@{/about}" th:attrappend="aria-current=${current == 'about' ? 'page' : null}">About</a>
+        <a th:href="@{/swagger-ui.html}">API</a>
+        <button type="button" class="theme-toggle" data-theme-toggle
+                aria-label="Switch between light and dark theme">Theme</button>
+    </nav>
+</header>
+
+<footer th:fragment="colophon" class="colophon">
+    <p>
+        Headlines from <a href="https://newsapi.org" rel="noopener">NewsAPI</a>.
+        Summaries written by a language model running locally through Ollama &mdash;
+        they can be wrong, so verify anything that matters.
+    </p>
+</footer>
+
+</body>
+</html>

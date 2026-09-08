@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Service unavailable')}"></head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<div class="shell">
+    <header th:replace="~{fragments/layout :: masthead('home')}"></header>
+
+    <main id="main">
+        <div class="notice">
+            <h1>That did not work</h1>
+            <p>
+                A service this depends on is unavailable, so there is no brief to show right now.
+                Nothing is broken on your side.
+            </p>
+            <p>
+                Dependency: <code th:text="${upstream}">upstream</code><br>
+                <span th:text="${detail}">detail</span>
+            </p>
+            <p th:if="${upstream == 'ollama'}">
+                Check that Ollama is running and that the model has been pulled:
+                <code>ollama serve</code>, then <code>ollama pull mistral:7b</code>.
+            </p>
+            <p th:if="${upstream == 'newsapi'}">
+                Check that <code>NEWS_API_KEY</code> is set and still valid. NewsAPI's free plan
+                also refuses requests that do not come from localhost.
+            </p>
+            <p><a th:href="@{/}">Try again</a></p>
+        </div>
+    </main>
+
+    <footer th:replace="~{fragments/layout :: colophon}"></footer>
+</div>
+</body>
+</html>

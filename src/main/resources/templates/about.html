@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('About')}"></head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<div class="shell">
+    <header th:replace="~{fragments/layout :: masthead('about')}"></header>
+
+    <main id="main" class="prose">
+        <p class="eyebrow">About</p>
+        <h1 class="brief__headline">How this is built</h1>
+        <p class="brief__overview">
+            A Spring Boot service that fetches current headlines, has a locally hosted model
+            summarize them, and serves the result to both people and programs.
+        </p>
+
+        <h2>Modules</h2>
+        <p>
+            One deployable artifact, four modules with enforced boundaries. Each exposes a small
+            public API and hides the rest in an <code>internal</code> package that siblings cannot
+            import — a rule checked by the build, not by code review.
+        </p>
+        <ul>
+            <li><strong>news</strong> — retrieving and normalizing headlines. The NewsAPI wire
+                format and the credential never leave this module.</li>
+            <li><strong>summarization</strong> — turning documents into a structured summary.
+                It takes its own input type rather than the news module's, so the two stay
+                independent siblings instead of a chain.</li>
+            <li><strong>brief</strong> — composes the two and publishes them, as JSON and
+                markdown for programs and as these pages for people.</li>
+            <li><strong>shared</strong> — cache setup, error vocabulary, resilience wiring.</li>
+        </ul>
+
+        <h2>The model returns data, not prose</h2>
+        <p>
+            Spring AI derives a JSON schema from a record and parses the reply back into it. That
+            is why this page and the JSON response cannot disagree: both render from the same
+            typed value. An earlier version asked the model for an HTML page and recovered it by
+            slicing characters off a markdown fence, which broke the moment the model phrased its
+            answer differently.
+        </p>
+
+        <h2>Failure is the normal case</h2>
+        <p>
+            Two network dependencies sit behind every request. Timeouts are explicit, transient
+            failures are retried with backoff and jitter, and a rejected API key is not retried
+            at all — repeating it only burns quota. Repeated failures open a circuit breaker so
+            calls fail fast instead of piling up.
+        </p>
+        <p>
+            Caching deliberately sits <em>ahead</em> of that breaker. When an upstream is down,
+            results the application already holds are exactly what should still be served.
+        </p>
+
+        <h2>This page you are reading</h2>
+        <p>
+            Server-rendered Thymeleaf, progressively enhanced with htmx. Every route works with
+            JavaScript disabled; htmx only adds the partial swap that makes a slow generation
+            show progress instead of freezing the tab.
+        </p>
+
+        <p><a th:href="@{/}">Back to the brief</a> &middot; <a th:href="@{/swagger-ui.html}">API reference</a></p>
+    </main>
+
+    <footer th:replace="~{fragments/layout :: colophon}"></footer>
+</div>
+</body>
+</html>

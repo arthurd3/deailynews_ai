@@ -2,162 +2,72 @@
 
 # NewsBrief AI
 
-**A daily news briefing service — current headlines in, a structured editorial summary out, written by a language model running on your own machine.**
+**The day's headlines, summarized by a model running on your own machine.**
+No hosted AI provider, no data leaving the box.
 
 [![Java](https://img.shields.io/badge/Java-21-e76f00?logo=openjdk&logoColor=white)](https://adoptium.net/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-6db33f?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
 [![Spring AI](https://img.shields.io/badge/Spring%20AI-2.0.1-6db33f?logo=spring&logoColor=white)](https://spring.io/projects/spring-ai)
-[![Spring Modulith](https://img.shields.io/badge/Spring%20Modulith-2.1.1-6db33f?logo=spring&logoColor=white)](https://spring.io/projects/spring-modulith)
-[![Ollama](https://img.shields.io/badge/Ollama-mistral:7b-000000?logo=ollama&logoColor=white)](https://ollama.com/)
+[![Ollama](https://img.shields.io/badge/Ollama-mistral:7b-000?logo=ollama&logoColor=white)](https://ollama.com/)
+[![Tests](https://img.shields.io/badge/tests-46%20passing-2ea44f)](#testing)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+<img src=".github/assets/brief-light.jpg" alt="The daily brief: a headline, an overview, and one card per story" width="820">
 
 </div>
 
 ---
 
-## What it does
+## What it is
 
-NewsBrief AI pulls the day's top headlines from [NewsAPI](https://newsapi.org), sends them to a
-locally hosted [Ollama](https://ollama.com) model, and returns a single structured brief. The same
-resource is served as JSON for machines and as a rendered page for people — chosen by content
-negotiation, not by two different URLs.
+NewsBrief AI pulls current headlines from [NewsAPI](https://newsapi.org), hands them to a local
+[Ollama](https://ollama.com) model, and turns them into one short editorial brief. It serves that
+brief as a page for people and as JSON or markdown for programs.
 
-Nothing leaves your machine except the headline request itself. The summarization happens locally.
+The model returns **structured data, not prose** — Spring AI derives a JSON schema from a Java
+record and parses the reply back into it. That is why the page and the API can never disagree:
+both render from the same typed value.
 
-```console
-$ curl -s -H 'Accept: application/json' localhost:8080/api/v1/briefs/daily | jq
-{
-  "headline": "Central banks hold as markets steady",
-  "overview": "Rates were left unchanged across two major economies while equity markets closed flat.",
-  "topics": [
-    {
-      "title": "Rates held steady",
-      "summary": "The central bank paused after six consecutive increases, citing cooling inflation.",
-      "category": "business"
-    }
-  ],
-  "sources": {
-    "country": "us",
-    "category": null,
-    "articleCount": 20,
-    "retrievedAt": "2026-09-08T14:20:46.386266657Z"
-  },
-  "generatedAt": "2026-09-08T14:20:52.118431003Z"
-}
-```
+| | |
+|---|---|
+| <img src=".github/assets/landing.jpg" alt="Landing page with country and category pickers" width="400"> | <img src=".github/assets/loading.jpg" alt="Skeleton placeholder shown while the model works" width="400"> |
+| **Pick a country and a category.** | **Generation takes seconds, so it says so.** |
+| <img src=".github/assets/brief-dark.jpg" alt="The same brief in the dark theme" width="400"> | <img src=".github/assets/mobile.jpg" alt="The brief on a phone-sized viewport" width="400"> |
+| **Follows the system theme, with a manual override.** | **Readable down to phone widths.** |
 
-The same URL with `Accept: text/html` returns a readable page instead.
+> Screenshots run against a local stub, so the headlines are representative rather than today's.
+> The application, templates and styles are the real ones.
 
 ---
 
-## Architecture
+## Stack, and why
 
-The application is a **modular monolith**. It deploys as one artifact, but its modules have real
-boundaries: each owns a public API and hides its implementation in an `internal` package that
-siblings cannot import. That rule is not a convention — [`ModularityTests`](src/test/java/com/arthur/newsbrief/ModularityTests.java)
-fails the build when it is broken.
-
-```mermaid
-flowchart TB
-    subgraph app["NewsBrief AI"]
-        direction TB
-        brief["<b>brief</b><br/><i>Daily Brief</i><br/>orchestration + HTTP API"]
-        news["<b>news</b><br/><i>News Acquisition</i><br/>NewsProvider port"]
-        summ["<b>summarization</b><br/><i>AI Summarization</i><br/>SummaryGenerator port"]
-        shared["<b>shared</b><br/><i>Shared Kernel</i> (open)<br/>cache · errors · resilience · OpenAPI"]
-    end
-
-    client(["HTTP client"]) --> brief
-    brief --> news
-    brief --> summ
-    news -.-> shared
-    summ -.-> shared
-    brief -.-> shared
-
-    news ==>|"X-Api-Key header"| newsapi[("NewsAPI")]
-    summ ==>|"Spring AI ChatClient"| ollama[("Ollama<br/>mistral:7b")]
-
-    classDef module fill:#eef4ff,stroke:#4a6fa5,stroke-width:1px,color:#12233d
-    classDef ext fill:#fff4e6,stroke:#c98a2e,stroke-width:1px,color:#3d2a12
-    class brief,news,summ,shared module
-    class newsapi,ollama ext
-```
-
-| Module | Responsibility | Public API | Depends on |
-| --- | --- | --- | --- |
-| `news` | Fetching and normalizing headlines | `NewsProvider`, `Article`, `Headlines`, `HeadlinesQuery` | `shared` |
-| `summarization` | Turning documents into a structured summary | `SummaryGenerator`, `SourceDocument`, `NewsSummary` | `shared` |
-| `brief` | Assembling the brief and publishing it over HTTP | `DailyBrief`, the REST resource | `news`, `summarization`, `shared` |
-| `shared` | Cache setup, RFC 9457 errors, resilience, OpenAPI | open module — usable by all | — |
-
-**`news` and `summarization` do not know about each other.** The summarizer accepts its own
-`SourceDocument` type rather than the news module's `Article`, so the two stay independent siblings
-that `brief` composes. Either upstream can be replaced without touching the other.
-
-`ModularityTests` regenerates C4 diagrams and module canvases from the code into `target/modules/`
-on every build, so the picture above can be checked against reality rather than trusted.
-
-<details>
-<summary><b>How a request flows through the modules</b></summary>
-
-`GET /api/v1/briefs/daily`
-
-1. **`NewsBriefController`** validates `country` and `category`, then resolves the configured default
-   country. The query is fully specified from here on, which matters because it becomes a cache key.
-2. **`NewsBriefService`** checks the `briefs` cache. A hit returns immediately.
-3. **`NewsApiNewsProvider`** checks the `headlines` cache, then calls NewsAPI through the declarative
-   client. It maps the wire format to `Article`, drops withdrawn `[Removed]` placeholders, and
-   translates failures into `NewsUnavailableException` with a transient/terminal flag.
-4. **`SpringAiSummaryGenerator`** caps the article list, renders the prompt template, and asks the
-   model for a `NewsSummary` as typed structured output rather than free text.
-5. **`NewsBriefService`** assembles a `DailyBrief` with provenance and a timestamp.
-6. The controller returns JSON, or renders the same value through Thymeleaf for `text/html`.
-
-Failures anywhere become RFC 9457 problem details via `ApiExceptionHandler`.
-
-</details>
+| Choice | Reason |
+|---|---|
+| **Spring Boot 4.1.1**, Java 21 | Virtual threads — almost all wall-clock time here is spent waiting on two network calls |
+| **Spring Modulith 2.1.1** | Module boundaries fail the build instead of relying on code review |
+| **Spring AI 2.0.1** | Typed structured output; swapping model provider is configuration, not a rewrite |
+| **Thymeleaf + htmx 2.0.10** | Server-rendered, works with JavaScript off, no build step and no CDN |
+| **Caffeine** | Headlines and briefs cost wildly different amounts, so they get separate TTLs |
+| **Spring `@Retryable`** + Resilience4j | Retry is built into Framework 7; breakers add the fail-fast the framework lacks |
+| **RFC 9457 `ProblemDetail`** | One predictable error shape for the API — and HTML pages for the browser |
 
 ---
 
-## Tech stack
-
-| Concern | Choice | Why |
-| --- | --- | --- |
-| Runtime | Java 21, Spring Boot 4.1.1 | Virtual threads; the app is almost entirely I/O wait |
-| Module boundaries | Spring Modulith 2.1.1 | Architecture enforced by the build, not by review |
-| AI integration | Spring AI 2.0.1 (`ChatClient`) | Typed structured output; swapping model provider is config |
-| HTTP client | Declarative `@HttpExchange` + `RestClient` | No hand-built URLs, no per-request `RestTemplate` |
-| Caching | Caffeine, per-cache TTLs | Headlines and briefs have very different costs |
-| Resilience | Spring `@Retryable` + Resilience4j circuit breakers | Retry is built into the framework; breakers add fail-fast |
-| Errors | RFC 9457 `ProblemDetail` | One predictable error shape across the API |
-| Docs | springdoc-openapi 3.1.1 | OpenAPI 3.1 + Swagger UI from the code |
-| Tests | JUnit 6, AssertJ, WireMock, Modulith | Ports make most tests need no HTTP at all |
-
----
-
-## Quick start
-
-### Prerequisites
-
-- A free [NewsAPI key](https://newsapi.org/register)
-- Docker with Compose *(or)* Java 21 and a local Ollama for the manual route
-
-### With Docker Compose (recommended)
+## Run it
 
 ```bash
-cp .env.example .env      # then add your NEWS_API_KEY
+cp .env.example .env      # add your free key from https://newsapi.org/register
 docker compose up
 ```
 
 Compose starts Ollama, pulls `mistral:7b` into a named volume, waits for that to finish, and only
-then starts the app. The first run downloads several gigabytes; later runs reuse the volume.
+then starts the app. First run downloads a few gigabytes; later runs reuse the volume.
 
-```bash
-open http://localhost:8080/api/v1/briefs/daily   # a rendered page
-open http://localhost:8080/swagger-ui.html       # the API explorer
-```
+Then open **<http://localhost:8080>**.
 
-### Running locally
+<details>
+<summary>Running without Docker</summary>
 
 ```bash
 ollama serve &
@@ -166,69 +76,52 @@ ollama pull mistral:7b
 NEWS_API_KEY=your_key ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
-> [!NOTE]
-> NewsAPI's free developer plan only serves requests from `localhost`. That is fine for local use
-> and for the Compose setup, but a deployed instance needs a paid key.
+NewsAPI's free plan only answers requests from `localhost`, which is fine locally but means a
+deployed instance needs a paid key.
 
----
-
-## Configuration
-
-Everything is overridable by environment variable. Secrets are read from `.env` in development
-(via `spring.config.import`) and from the real environment everywhere else.
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `NEWS_API_KEY` | *(required)* | NewsAPI credential. Startup fails fast with a clear message if it is missing. |
-| `OLLAMA_MODEL` | `mistral:7b` | Any model your Ollama instance can serve |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Set automatically to `http://ollama:11434` under the `docker` profile |
-| `SPRING_PROFILES_ACTIVE` | *(none)* | `dev` for debug logging and full health detail; `docker` for Compose |
-
-Application settings live in [`application.yml`](src/main/resources/application.yml):
-
-| Property | Default | Purpose |
-| --- | --- | --- |
-| `newsbrief.brief.default-country` | `us` | Country used when a request does not name one |
-| `newsbrief.news-api.max-articles` | `20` | Articles requested per NewsAPI call |
-| `newsbrief.news-api.read-timeout` | `10s` | NewsAPI must answer quickly |
-| `newsbrief.summarization.max-documents` | `10` | Hard cap on articles fed into one prompt |
-| `newsbrief.caching.caches.headlines` | `expireAfterWrite=5m` | Headlines go stale quickly |
-| `newsbrief.caching.caches.briefs` | `expireAfterWrite=30m` | A brief costs seconds of inference |
-
-Prompts are plain text in [`resources/prompts/`](src/main/resources/prompts) —
-edit the wording without recompiling.
+</details>
 
 ---
 
 ## API
 
-Base path `/api/v1/briefs`. Full schema at `/v3/api-docs`, interactive at `/swagger-ui.html`.
+| Route | Serves |
+|---|---|
+| `GET /` | the app |
+| `GET /briefs/daily` | the brief as a page |
+| `GET /about` | how it is built, inside the app |
+| `GET /api/v1/briefs/daily` | `application/json` or `text/markdown`, by `Accept` |
+| `GET /swagger-ui.html` | interactive API reference |
 
-### `GET /api/v1/briefs/daily`
-
-| Parameter | Required | Values | Description |
-| --- | --- | --- | --- |
-| `country` | no | ISO 3166-1 alpha-2 | Defaults to `newsbrief.brief.default-country` |
-| `category` | no | `business`, `entertainment`, `general`, `health`, `science`, `sports`, `technology` | Narrows the headlines |
-
-| Status | Meaning |
-| --- | --- |
-| `200` | A brief, as JSON or HTML depending on `Accept` |
-| `400` | Unrecognised `country` or `category` |
-| `503` | NewsAPI or the model is unavailable, or its circuit breaker is open |
+Optional `country` (ISO 3166-1 alpha-2) and `category` (`business`, `entertainment`, `general`,
+`health`, `science`, `sports`, `technology`).
 
 ```bash
-# JSON
-curl -s -H 'Accept: application/json' localhost:8080/api/v1/briefs/daily
-
-# The same resource as a page
-curl -s -H 'Accept: text/html' localhost:8080/api/v1/briefs/daily
-
-# Narrowed
-curl -s -H 'Accept: application/json' 'localhost:8080/api/v1/briefs/daily?country=gb&category=technology'
+curl -s -H 'Accept: application/json' localhost:8080/api/v1/briefs/daily | jq
+curl -s -H 'Accept: text/markdown'   'localhost:8080/api/v1/briefs/daily?category=technology'
 ```
 
-Errors are [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem details:
+<details>
+<summary>Sample response and error shape</summary>
+
+```json
+{
+  "headline": "Central banks hold rates as energy costs ease",
+  "overview": "Two major central banks left rates unchanged, citing slower inflation.",
+  "topics": [
+    {
+      "title": "Rates held after six consecutive increases",
+      "summary": "Policymakers paused, pointing to inflation easing for a fourth month.",
+      "category": "business"
+    }
+  ],
+  "sources": { "country": "us", "category": null, "articleCount": 20,
+               "retrievedAt": "2026-09-08T14:20:46Z" },
+  "generatedAt": "2026-09-08T14:20:52Z"
+}
+```
+
+Failures are [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem details:
 
 ```json
 {
@@ -236,120 +129,108 @@ Errors are [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem details:
   "title": "Upstream service unavailable",
   "status": 503,
   "detail": "NewsAPI responded with 401 UNAUTHORIZED",
-  "instance": "/api/v1/briefs/daily",
   "upstream": "newsapi"
 }
 ```
 
+The browser gets an HTML page for the same failure instead — a scoped `@ControllerAdvice` takes
+precedence over the global one for the page routes.
+
+</details>
+
 ---
 
-## Project structure
+## Architecture
 
+One deployable artifact, four modules with **enforced** boundaries. Each exposes a small public API
+and hides the rest in an `internal` package siblings cannot import.
+
+```mermaid
+flowchart TB
+    client(["Browser / API client"]) --> brief
+
+    subgraph app[" "]
+        direction TB
+        brief["<b>brief</b><br/>orchestration · pages · API"]
+        news["<b>news</b><br/>NewsProvider port"]
+        summ["<b>summarization</b><br/>SummaryGenerator port"]
+        shared["<b>shared</b> (open)<br/>cache · errors · resilience"]
+    end
+
+    brief --> news
+    brief --> summ
+    news -.-> shared
+    summ -.-> shared
+    brief -.-> shared
+
+    news ==>|X-Api-Key header| newsapi[("NewsAPI")]
+    summ ==>|Spring AI ChatClient| ollama[("Ollama<br/>mistral:7b")]
+
+    classDef m fill:#eef4ff,stroke:#4a6fa5,color:#12233d
+    classDef e fill:#fff4e6,stroke:#c98a2e,color:#3d2a12
+    class brief,news,summ,shared m
+    class newsapi,ollama e
 ```
-NewsBrief_IA/
-├── pom.xml
-├── Dockerfile                    multi-stage, layered jar, non-root
-├── docker-compose.yml            app + ollama + one-shot model pull
-└── src/
-    ├── main/
-    │   ├── java/com/arthur/newsbrief/
-    │   │   ├── NewsBriefApplication.java
-    │   │   ├── shared/           config · error  (open module)
-    │   │   ├── news/             Article · Headlines · NewsProvider
-    │   │   │   └── internal/     NewsAPI client, properties, adapter
-    │   │   ├── summarization/    NewsSummary · SourceDocument · SummaryGenerator
-    │   │   │   └── internal/     Spring AI adapter, properties
-    │   │   └── brief/            DailyBrief · NewsBriefController
-    │   │       └── internal/     NewsBriefService, properties
-    │   └── resources/
-    │       ├── application.yml   base + dev + docker profiles
-    │       ├── prompts/          system and user prompt templates
-    │       └── templates/        Thymeleaf page for the HTML representation
-    └── test/java/com/arthur/newsbrief/
-        └── ...                   one test package per module, mirroring main
-```
 
-Each module's `internal` package is invisible to its siblings. Public API sits in the module root.
+**`news` and `summarization` do not know about each other.** The summarizer takes its own
+`SourceDocument` type rather than the news module's `Article`, so the two stay independent siblings
+that `brief` composes. Either upstream can be replaced without touching the other.
 
----
+<details>
+<summary><b>How a request flows through the modules</b></summary>
 
-## Testing
+1. **`BriefPageController`** validates `country` and `category`, then resolves the configured
+   default. The query is fully specified from here on — it becomes a cache key.
+2. **`NewsBriefService`** checks the `briefs` cache. A hit returns immediately.
+3. **`NewsApiNewsProvider`** checks the `headlines` cache, then calls NewsAPI through a declarative
+   `@HttpExchange` client. It maps the wire format to `Article`, drops withdrawn `[Removed]`
+   placeholders, and translates failures with a transient/terminal flag.
+4. **`SpringAiSummaryGenerator`** caps the article list, renders the prompt template, and asks for
+   a typed `NewsSummary`.
+5. **`NewsBriefService`** assembles a `DailyBrief` with provenance and a timestamp.
+6. The controller renders it — or returns just the fragment when htmx is driving the request.
 
-```bash
-./mvnw verify
-```
+</details>
 
-34 tests, no network required.
+<details>
+<summary><b>Why a modular monolith, and not layers or a multi-module build</b></summary>
 
-| Suite | What it covers |
-| --- | --- |
-| `ModularityTests` | Module boundaries; also regenerates the C4 diagrams into `target/modules/` |
-| `NewsBriefServiceTest` | Orchestration, using fakes for both ports — no Spring, no HTTP |
-| `NewsApiNewsProviderTest` | WireMock: mapping, header auth, retry policy, withdrawn articles, cache |
-| `HeadlinesCircuitBreakerTest` | An open circuit still serves cached results |
-| `SpringAiSummaryGeneratorTest` | Prompt contents, the document cap, failure translation |
-| `NewsBriefControllerTest` | Content negotiation, validation, problem-detail shape |
-| `BriefCachingTest` | Cache-key correctness — see the note below |
+The service began organized by technical layer — `controller`, `service`, `client`, `dto`. That
+scatters one feature across four packages and says nothing about what may depend on what. Nothing
+stopped the controller from reaching into the NewsAPI wire format, and in practice it did: it
+received a provider-shaped string and sliced characters off it.
 
-> [!IMPORTANT]
-> `BriefCachingTest` exists because an earlier version cached on `#root.method.name`, a constant.
-> Every distinct request collided on one entry, so the first caller's brief was served to everyone.
-> These tests fail if that ever returns.
+A Maven multi-module build would give harder isolation, but for roughly twenty classes the ceremony
+and slower builds outweigh the benefit. Package-by-feature with build-time verification gets the
+same guarantee far cheaper, and a module can still be extracted later without rewriting anything.
 
----
+The trade-off: `shared` has to be an open module, and keeping anything feature-specific out of it
+is a discipline the tooling does not enforce.
 
-## Observability
+</details>
 
-| Endpoint | Shows |
-| --- | --- |
-| `/actuator/health` | Liveness, readiness and per-upstream circuit-breaker state |
-| `/actuator/metrics` | JVM, HTTP and cache metrics |
-| `/actuator/caches` | The `headlines` and `briefs` caches |
-| `/actuator/prometheus` | Scrape endpoint |
+<details>
+<summary><b>Why Spring AI, and why structured output</b></summary>
 
-Both upstreams sit behind a circuit breaker whose state is reported in `/actuator/health`, so a
-failing dependency is visible before users complain about it.
-
----
-
-## Design notes
-
-### Why a modular monolith
-
-The service started out organized by technical layer — `controller`, `service`, `client`, `dto`.
-That scatters one feature across four packages and says nothing about what may depend on what.
-Nothing stopped the controller from reaching into the NewsAPI wire format, and in practice it did:
-it received a provider-shaped string and sliced characters off it.
-
-A Maven multi-module build would give harder isolation, but for roughly fifteen classes the ceremony
-and slower builds outweigh the benefit. Package-by-feature with build-time verification gets the same
-guarantee at a fraction of the cost, and a module can still be extracted into its own artifact later
-without rewriting anything.
-
-The trade-off: `shared` has to be an open module, or the feature modules cannot reach the cache and
-error infrastructure. Keeping anything feature-specific out of `shared` is a discipline the tooling
-does not enforce.
-
-### Why Spring AI, and why structured output
-
-The original integration hand-rolled the Ollama wire format and asked the model for a full HTML page,
-which the controller recovered with `summary.substring(7, length - 3)` — stripping an assumed
-` ```html ` fence by character offset. When the model wrapped its reply differently, that produced
+The original integration hand-rolled the Ollama wire format and asked the model for a full HTML
+page, which the controller recovered with `summary.substring(7, length - 3)` — stripping an assumed
+markdown fence by character offset. When the model phrased its reply differently, that produced
 mangled output or a `StringIndexOutOfBoundsException`.
 
-Spring AI derives a JSON schema from the `NewsSummary` record, appends it to the prompt, and parses
-the reply back into an instance. There is no prose to scrape, only data to bind — which retires that
-entire class of bug. JSON and HTML then render from the same typed value, so the two representations
-cannot disagree, and rendering through Thymeleaf escapes its inputs, removing the stored-XSS exposure
-of returning model-authored HTML verbatim. About eighty lines of HTTP plumbing were deleted.
+Asking for a typed record retires that entire class of bug: there is no prose to scrape, only data
+to bind. Rendering through Thymeleaf also escapes its inputs, removing the stored-XSS exposure of
+returning model-authored HTML verbatim. About eighty lines of HTTP plumbing were deleted.
 
-The trade-off: structured output depends on the model honouring the schema. A smaller model may fail
-to comply; the fallback is free-text summaries behind the same `SummaryGenerator` port, which is
+The trade-off: structured output depends on the model honouring the schema. A smaller model may
+fail to comply; the fallback is free-text behind the same `SummaryGenerator` port, which is
 precisely why the port exists.
 
-### Interception order
+</details>
 
-Three proxies wrap the adapter methods, and the order is deliberate:
+<details>
+<summary><b>Interception order, and how failure is handled</b></summary>
+
+Three proxies wrap the adapter methods:
 
 ```
 @Retryable  →  @Cacheable  →  @CircuitBreaker  →  the actual call
@@ -359,47 +240,86 @@ Three proxies wrap the adapter methods, and the order is deliberate:
 because an open circuit would then suppress results the application already holds — the opposite of
 what a cache is for during an outage. `HeadlinesCircuitBreakerTest` pins this.
 
-**Retry ends up outermost.** Spring installs it through a `BeanPostProcessor`, so it wraps the advisor
-chain rather than joining it. Harmless: a cache hit does not throw, so retry has nothing to act on.
-
-### Failure handling
+**Retry ends up outermost.** Spring installs it through a `BeanPostProcessor`, so it wraps the
+advisor chain rather than joining it. Harmless: a cache hit does not throw.
 
 | Failure | Response |
-| --- | --- |
+|---|---|
 | Connect or read timeout | Retried twice, exponential backoff with jitter |
 | NewsAPI 5xx or 429 | Retried |
 | NewsAPI 401/403, malformed request | **Not** retried — repeating it only burns quota |
-| Repeated failures | Circuit opens; further calls fail fast as 503 |
+| Repeated failures | Circuit opens; further calls fail fast |
 | Model unreachable or off-schema | `SummarizationException` → 503 |
 
-Timeouts are explicit on every outbound call. An unbounded HTTP client holds a request thread for as
-long as the upstream cares to stall, which is the failure mode that takes a service down under load.
+Timeouts are explicit on every outbound call. An unbounded HTTP client holds a request thread for
+as long as the upstream cares to stall, which is the failure mode that takes a service down.
 
-### Other decisions worth knowing
+The "generate again" button carries `@ConcurrencyLimit(1)`: each press costs tens of seconds of
+CPU, and without it a few impatient clicks would start that many models in parallel.
 
-- **The API key travels as a header**, never a query parameter, so it cannot reach an access log.
-- **The catch-all handler logs the cause and returns a generic message.** An unexpected stack trace
-  can carry connection strings.
-- **Queries are fully resolved before they become cache keys.** Otherwise `(null, null)` and
-  `("us", null)` are two entries holding identical results.
-- **Two caches, different economics.** Headlines are one cheap call but go stale fast (5 min); a
-  brief costs seconds of local inference and is worth holding (30 min).
+</details>
+
+<details>
+<summary><b>Project structure</b></summary>
+
+```
+src/main/
+├── java/com/arthur/newsbrief/
+│   ├── shared/           config · error            (open module)
+│   ├── news/             Article · NewsProvider
+│   │   └── internal/     NewsAPI client, properties, adapter
+│   ├── summarization/    NewsSummary · SummaryGenerator
+│   │   └── internal/     Spring AI adapter, prompts
+│   └── brief/            DailyBrief · JSON + markdown API
+│       ├── web/          pages, htmx fragments, HTML errors
+│       └── internal/     orchestration, markdown rendering
+└── resources/
+    ├── application.yml   base + dev + docker profiles
+    ├── prompts/          system and user prompt templates
+    ├── static/           app.css · app.js
+    └── templates/        pages, fragments, error pages
+```
+
+</details>
+
+---
+
+## Testing
+
+```bash
+./mvnw verify
+```
+
+46 tests, no network required.
+
+| Suite | Covers |
+|---|---|
+| `ModularityTests` | Module boundaries; regenerates C4 diagrams into `target/modules/` |
+| `NewsBriefServiceTest` | Orchestration against fakes — no Spring, no HTTP |
+| `NewsApiNewsProviderTest` | WireMock: mapping, header auth, retry policy, caching |
+| `HeadlinesCircuitBreakerTest` | An open circuit still serves cached results |
+| `SpringAiSummaryGeneratorTest` | Prompt contents, document cap, failure translation |
+| `NewsBriefControllerTest` | JSON and markdown negotiation, problem-detail shape |
+| `BriefPageControllerTest` | Pages, htmx fragments, and **errors as HTML rather than JSON** |
+| `BriefCachingTest` | Cache-key correctness |
+
+> `BriefCachingTest` exists because an earlier version cached on `#root.method.name`, a constant.
+> Every distinct request collided on one entry, so the first caller's brief was served to everyone.
+
+Health, metrics and per-upstream circuit-breaker state are at `/actuator/health`.
 
 ---
 
 ## Roadmap
 
-- [ ] Scheduled generation so the morning brief is warm before the first request
+- [ ] Scheduled generation, so the morning brief is warm before the first request
 - [ ] Persistence, to keep an archive of past briefs
 - [ ] Per-client rate limiting on the public endpoint
-- [ ] Streaming responses for the HTML representation
-- [ ] A second `SummaryGenerator` adapter for a hosted model, selected by configuration
-
----
+- [ ] A second `SummaryGenerator` adapter for a hosted model, chosen by configuration
 
 ## License
 
 [MIT](LICENSE) © Arthur
 
-Headline data is supplied by [NewsAPI](https://newsapi.org) under their terms. Summaries are written
-by a language model and can be wrong — verify anything that matters.
+Headline data from [NewsAPI](https://newsapi.org) under their terms. Summaries are written by a
+language model and can be wrong — verify anything that matters.

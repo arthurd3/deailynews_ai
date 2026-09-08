@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<!--/* Placeholder shown while the model is working. Generation is tens of seconds of
+       local inference, so this is not decoration: without it the tab just sits there.
+       It ships inside every render of the region because htmx only swaps the content
+       once the response arrives - the skeleton has to already be on the page. */-->
+<div th:fragment="skeleton" class="loading" aria-hidden="true">
+    <p class="loading__note">
+        <span class="spinner"></span>
+        Summarizing headlines with a local model. This usually takes a few seconds.
+    </p>
+    <div class="skeleton__line skeleton__line--title"></div>
+    <div class="skeleton__line"></div>
+    <div class="skeleton__line skeleton__line--short"></div>
+    <div class="skeleton__block"></div>
+    <div class="skeleton__block"></div>
+</div>
+
+<div th:fragment="main">
+    <section th:replace="~{fragments/controls :: controls}"></section>
+    <div id="brief-region" aria-live="polite">
+        <div th:replace="~{fragments/brief :: brief}"></div>
+    </div>
+</div>
+
+<div th:fragment="brief">
+    <div th:replace="~{fragments/brief :: skeleton}"></div>
+
+    <div class="on-idle">
+        <article aria-labelledby="brief-headline">
+            <p class="eyebrow">Daily Brief</p>
+            <h1 id="brief-headline" class="brief__headline" th:text="${brief.headline()}">Headline</h1>
+            <p class="brief__overview" th:text="${brief.overview()}">Overview of the day.</p>
+
+            <section class="topic" th:each="topic : ${brief.topics()}">
+                <span class="topic__category" th:if="${topic.category()}"
+                      th:text="${topic.category()}">category</span>
+                <h2 class="topic__title" th:text="${topic.title()}">Topic title</h2>
+                <p class="topic__summary" th:text="${topic.summary()}">Topic summary.</p>
+            </section>
+
+            <p class="notice" th:if="${brief.topics().isEmpty()}">
+                The model returned no topics for this selection. Try another category.
+            </p>
+
+            <div class="brief__actions">
+                <button type="button" class="button button--quiet"
+                        th:attr="data-markdown-url=@{/api/v1/briefs/daily(country=${brief.sources().country()}, category=${brief.sources().category()})}">
+                    Copy as markdown
+                </button>
+
+                <!--/* POST because it discards the cached brief and pays for inference again.
+                       @ConcurrencyLimit(1) on the service keeps repeated clicks serialized. */-->
+                <button type="button" class="button button--quiet"
+                        hx-post="/briefs/daily"
+                        th:attr="hx-vals=|{&quot;country&quot;:&quot;${brief.sources().country()}&quot;,&quot;category&quot;:&quot;${brief.sources().category() ?: ''}&quot;}|"
+                        hx-target="#app"
+                        hx-swap="innerHTML"
+                        hx-indicator="#app">
+                    Generate again
+                </button>
+            </div>
+
+            <p class="colophon">
+                Summarized from
+                <strong th:text="${brief.sources().articleCount()}">0</strong> headlines
+                (<span th:text="${brief.sources().country()}">us</span><span
+                    th:if="${brief.sources().category()}"
+                    th:text="' · ' + ${brief.sources().category()}"></span>)
+                &middot;
+                <time th:datetime="${brief.generatedAt()}" th:text="${brief.generatedAt()}">now</time>
+            </p>
+        </article>
+    </div>
+</div>
+
+</body>
+</html>

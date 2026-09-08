@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Daily brief')}"></head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<div class="shell">
+    <header th:replace="~{fragments/layout :: masthead('home')}"></header>
+
+    <main id="main">
+        <div id="app">
+        <section th:replace="~{fragments/controls :: controls}"></section>
+
+        <div id="brief-region" aria-live="polite" aria-busy="false">
+            <div th:replace="~{fragments/brief :: skeleton}"></div>
+
+            <div class="on-idle">
+                <div class="notice">
+                    <h1>Today's headlines, summarized locally</h1>
+                    <p>
+                        Pick a country and category above, then generate a brief. Headlines come
+                        from NewsAPI; the summary is written by a model running on this machine,
+                        so nothing is sent to a hosted provider.
+                    </p>
+                    <p>
+                        The first run takes a few seconds while the model reads the articles.
+                        Results are cached, so asking again is instant.
+                    </p>
+                </div>
+            </div>
+        </div>
+        </div>
+    </main>
+
+    <footer th:replace="~{fragments/layout :: colophon}"></footer>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>

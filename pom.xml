@@ -31,6 +31,7 @@
         <springdoc.version>3.1.1</springdoc.version>
         <resilience4j.version>2.4.0</resilience4j.version>
         <archunit.version>1.4.2</archunit.version>
+        <htmx.version>2.0.10</htmx.version>
         <wiremock-spring-boot.version>4.2.3</wiremock-spring-boot.version>
     </properties>
 
@@ -75,6 +76,13 @@
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
             <version>${springdoc.version}</version>
+        </dependency>
+        <!-- htmx as a webjar: no CDN, no build step, no vendored binary in the repository.
+             Pinned to 2.0.10, which npm still tags "latest"; 4.0.0 ships on the "next" channel. -->
+        <dependency>
+            <groupId>org.webjars.npm</groupId>
+            <artifactId>htmx.org</artifactId>
+            <version>${htmx.version}</version>
         </dependency>
 
         <!-- AI -->

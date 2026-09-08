@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Not found')}"></head>
+<body>
+<div class="shell">
+    <header th:replace="~{fragments/layout :: masthead('')}"></header>
+    <main id="main">
+        <div class="notice">
+            <h1>No such page</h1>
+            <p>That address does not exist here.</p>
+            <p><a th:href="@{/}">Go to the brief</a></p>
+        </div>
+    </main>
+    <footer th:replace="~{fragments/layout :: colophon}"></footer>
+</div>
+</body>
+</html>

@@ -14,7 +14,9 @@ import com.arthur.newsbrief.summarization.SourceDocument;
 import com.arthur.newsbrief.summarization.SummaryGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.resilience.annotation.ConcurrencyLimit;
 import org.springframework.stereotype.Service;
 
 /**
@@ -47,6 +49,28 @@ public class NewsBriefService {
      */
     @Cacheable(cacheNames = CACHE, key = "#query")
     public DailyBrief dailyBrief(HeadlinesQuery query) {
+        return build(query);
+    }
+
+    /**
+     * Rebuilds the brief for {@code query}, replacing whatever the cache holds.
+     *
+     * <p>This re-runs the summarization. The headlines themselves keep their own five-minute
+     * TTL, so asking again inside that window gives a fresh summary of the same material —
+     * which is what "generate again" means to someone looking at a brief they did not like.
+     *
+     * <p>{@link ConcurrencyLimit} matters more than it looks: every call costs tens of
+     * seconds of local inference, and the button that triggers it is public. Without the
+     * limit, a handful of impatient clicks would start that many models in parallel.
+     */
+    @CachePut(cacheNames = CACHE, key = "#query")
+    @ConcurrencyLimit(1)
+    public DailyBrief regenerate(HeadlinesQuery query) {
+        log.info("Regenerating on request, bypassing the cached brief for {}", query);
+        return build(query);
+    }
+
+    private DailyBrief build(HeadlinesQuery query) {
         log.info("Generating a brief for {}", query);
 
         Headlines headlines = newsProvider.topHeadlines(query);
