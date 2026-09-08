@@ -1,0 +1,16 @@
+[%autowidth.stretch, cols="h,a"]
+|===
+|Description
+|Assembles a daily brief and publishes it over HTTP.  
++
+The only module that depends on both `news` and `summarization`: it fetches headlines, hands them to the summarizer, and decides how the result is represented. Presentation lives here rather than in the summarization module, because "JSON or HTML" is a delivery question, not a modelling one.
+|Base package
+|`com.arthur.newsbrief.brief`
+|Bean references
+|* `c.a.n.n.NewsProvider` (in News Acquisition) -- Port for reading current headlines.  
++
+Callers depend on this interface, never on the NewsAPI adapter behind it. Tests that only need headlines can supply a two-line fake instead of standing up HTTP.
+* `c.a.n.s.SummaryGenerator` (in AI Summarization) -- Port for producing a `c.a.n.s.NewsSummary` from source material.  
++
+The implementation currently talks to a local Ollama model through Spring AI. Because callers only see this interface, moving to a hosted provider is a change to one class in `internal` and a line of configuration.
+|===

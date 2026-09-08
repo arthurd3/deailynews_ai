@@ -1,0 +1,13 @@
+[%autowidth.stretch, cols="h,a"]
+|===
+|Description
+|Retrieval of current headlines from an external news provider.  
++
+Public API: `c.a.n.n.NewsProvider` and the records it returns. Everything under `internal` — the NewsAPI wire format, credentials and HTTP wiring — is invisible to other modules, so swapping the upstream provider stays a local change.
+|Base package
+|`com.arthur.newsbrief.news`
+|Spring components
+|* `c.a.n.n.NewsProvider` (via `c.a.n.n.internal.NewsApiNewsProvider` -- NewsAPI-backed implementation of the `c.a.n.n.NewsProvider` port.  
++
+Owns three concerns that the rest of the application should never see: mapping the provider's wire format onto `c.a.n.n.Article`, deciding which failures are worth retrying, and short-circuiting once NewsAPI is clearly down.)
+|===
